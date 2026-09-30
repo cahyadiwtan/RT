@@ -100,6 +100,8 @@
                 </div>
             </div>
 
+            @include('pengurus.residents.partials.population-fields')
+
             <div class="flex items-center gap-2 pt-2">
                 <input type="checkbox" id="is_verified" name="is_verified" value="1" {{ old('is_verified') ? 'checked' : '' }}
                     class="rounded bg-ink border-amber/10 text-jade">

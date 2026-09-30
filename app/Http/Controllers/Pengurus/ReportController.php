@@ -3,13 +3,18 @@
 namespace App\Http\Controllers\Pengurus;
 
 use App\Http\Controllers\Controller;
-use App\Services\ReportService;
 use App\Services\CashFlowService;
+use App\Services\PopulationReportService;
+use App\Services\ReportService;
 use Illuminate\Http\Request;
 
 class ReportController extends Controller
 {
-    public function __construct(protected ReportService $reportService, protected CashFlowService $cashFlowService) {}
+    public function __construct(
+        protected ReportService $reportService,
+        protected CashFlowService $cashFlowService,
+        protected PopulationReportService $populationReportService,
+    ) {}
 
     public function index()
     {
@@ -80,6 +85,17 @@ class ReportController extends Controller
         return view('pengurus.reports.assets', compact('assets', 'summary'));
     }
 
+    public function kependudukan(Request $request)
+    {
+        $year = $request->integer('year') ?: null;
+        $month = $request->integer('month') ?: null;
+
+        $report = $this->populationReportService->getReport($year, $month);
+        $periods = $this->populationReportService->availablePeriods();
+
+        return view('pengurus.reports.kependudukan', compact('report', 'periods'));
+    }
+
     public function export(Request $request, string $type)
     {
         $filename = "laporan-{$type}-".now()->format('Y-m-d').'.csv';
@@ -97,6 +113,7 @@ class ReportController extends Controller
                 'tunggakan' => $this->exportArrears($handle),
                 'deposit' => $this->exportDeposits($handle),
                 'inventaris' => $this->exportAssets($handle),
+                'kependudukan' => $this->exportKependudukan($handle, $request),
                 default => null,
             };
 
@@ -189,16 +206,88 @@ class ReportController extends Controller
 
         $rows = $this->reportService->getAssetRows();
 
-        foreach ($rows as $asset) {
+        foreach ($rows as $row) {
             fputcsv($handle, [
-                $asset->asset_code,
-                $asset->name,
-                $asset->category?->name ?? '-',
-                $asset->quantity.' '.$asset->unit,
-                $asset->condition,
-                $asset->status,
-                $asset->location ?? '-',
+                $row->asset_code,
+                $row->name,
+                $row->category?->name ?? '-',
+                $row->quantity.' '.$row->unit,
+                $row->condition,
+                $row->status,
+                $row->location ?? '-',
             ]);
         }
+    }
+
+    /**
+     * Rekapitulasi registrasi kependudukan dengan layout resmi RT/RW,
+     * bukan tabel datar, jadi ditulis per baris seperti pada format contoh.
+     */
+    private function exportKependudukan($handle, Request $request): void
+    {
+        $report = $this->populationReportService->getReport(
+            $request->integer('year') ?: null,
+            $request->integer('month') ?: null,
+        );
+
+        $profile = $report['profile'];
+        $rtLabel = $profile?->label ?? 'RT.000 RW.000';
+
+        fputcsv($handle, ['LAPORAN BULANAN RUKUN TETANGGA']);
+        fputcsv($handle, ["REKAPITULASI REGISTRASI KEPENDUDUKAN {$rtLabel}"]);
+        fputcsv($handle, [strtoupper($profile?->kelurahan ?? '-').' KECAMATAN '.strtoupper($profile?->kecamatan ?? '-')]);
+        fputcsv($handle, [strtoupper($profile?->kota ?? '-').' PROVINSI '.strtoupper($profile?->provinsi ?? '-')]);
+        fputcsv($handle, ['3. LAPORAN REKAPITULASI REGISTRASI KEPENDUDUKAN']);
+        fputcsv($handle, []);
+        fputcsv($handle, ['BULAN,:', $report['bulan']]);
+        fputcsv($handle, ['TAHUN,:', $report['tahun']]);
+        fputcsv($handle, []);
+
+        // Header utama: grup kolom melompati 3 sub-kolom.
+        $head = ['NO.', 'URAIAN'];
+        foreach (PopulationReportService::HEADER_GROUPS as $group) {
+            $head[] = $group['label'];
+            $head[] = '';
+            $head[] = '';
+        }
+        $head[] = 'KET';
+        fputcsv($handle, $head);
+
+        // Sub-header kolom.
+        $sub = ['', ''];
+        foreach (PopulationReportService::HEADER_GROUPS as $group) {
+            foreach (PopulationReportService::subColumnsFor($group['label']) as $label) {
+                $sub[] = $label;
+            }
+        }
+        $sub[] = '';
+        fputcsv($handle, $sub);
+
+        $index = 0;
+        foreach (PopulationReportService::buildRows($report) as $row) {
+            // Nama periode ditulis sekali di baris pertama tiap kelompok (WNI).
+            $label = $row['nationality'] === 'WNI'
+                ? "{$row['period']} - {$row['nationality']}"
+                : $row['nationality'];
+
+            $cells = [$index + 1, $label];
+            foreach (PopulationReportService::COLUMNS as $column) {
+                $cells[] = $row['values'][$column] ?? 0;
+            }
+            $cells[] = '';
+
+            fputcsv($handle, $cells);
+            $index++;
+        }
+
+        fputcsv($handle, []);
+        fputcsv($handle, ['Keterangan:']);
+        fputcsv($handle, ['L,:', 'Laki-laki']);
+        fputcsv($handle, ['P,:', 'Perempuan']);
+        fputcsv($handle, ['DD,:', 'Dalam Daerah (Kota Tangerang)']);
+        fputcsv($handle, ['LD,:', 'Luar Daerah (di luar Kota Tangerang)']);
+        fputcsv($handle, []);
+        fputcsv($handle, ["KETUA {$rtLabel}"]);
+        fputcsv($handle, ['(nama)', $profile?->ketua_rt ?? '-']);
     }
 }

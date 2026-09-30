@@ -14,6 +14,7 @@ use App\Http\Controllers\Pengurus\MonthlyBillController;
 use App\Http\Controllers\Pengurus\MonthlyFeeSettingController;
 use App\Http\Controllers\Pengurus\PaymentController;
 use App\Http\Controllers\Pengurus\ReportController;
+use App\Http\Controllers\Pengurus\RtProfileController;
 use App\Http\Controllers\Pengurus\ResidentController;
 use App\Http\Controllers\Pengurus\UserController;
 use App\Http\Controllers\Warga\AspirationController as WargaAspirationController;
@@ -95,8 +96,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('reports/arrears', [ReportController::class, 'arrears'])->name('reports.arrears');
         Route::get('reports/deposits', [ReportController::class, 'deposits'])->name('reports.deposits');
         Route::get('reports/cashflow', [ReportController::class, 'cashflow'])->name('reports.cashflow');
-        Route::get('reports/assets', [ReportController::class, 'assets'])->name('reports.assets');
-        Route::get('reports/export/{type}', [ReportController::class, 'export'])->name('reports.export');
+Route::get('reports/assets', [ReportController::class, 'assets'])->name('reports.assets');
+Route::get('reports/kependudukan', [ReportController::class, 'kependudukan'])->name('reports.kependudukan');
+Route::get('reports/export/{type}', [ReportController::class, 'export'])->name('reports.export');
+Route::get('rt-profile', [RtProfileController::class, 'index'])->name('rt-profile.index');
+Route::put('rt-profile', [RtProfileController::class, 'update'])->name('rt-profile.update');
 
         // Aspirasi routes
         Route::get('aspirations', [PengurusAspirationController::class, 'index'])->name('aspirations.index');
